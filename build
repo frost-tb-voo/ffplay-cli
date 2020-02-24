@@ -1,0 +1,5 @@
+#!/bin/sh
+
+docker pull golang:1.13
+docker build -t novsyama/ffplay-cli .
+

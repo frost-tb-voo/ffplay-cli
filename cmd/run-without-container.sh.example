@@ -1,0 +1,7 @@
+#!/bin/sh
+
+DIR=$(cd $(dirname ${BASH_SOURCE:-$0}); pwd)
+cd ${DIR}
+
+./ffplay-cli -index ~/media-explorer/view/images-ffmpeg.json -ext ~/media-explorer/fileanalysis/media-indexer.video.ext -substr pathstring -volume 10
+
