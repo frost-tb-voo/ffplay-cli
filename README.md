@@ -1,11 +1,14 @@
 # ffplay-cli
-Use [ffplay](https://www.ffmpeg.org/ffplay.html) as a CLI tool.
+Play only sound of sound or video files using [ffplay](https://www.ffmpeg.org/ffplay.html) as a CLI tool, without GUI.
 
 ## Build
 Use [cmd/build-without-container](cmd/build-without-container.sh).
 
 ## Run
 Use [cmd/run-without-container](cmd/run-without-container.sh.example).
+
+- Interrupt process : Ctrl^C
+- Play the next file : Ctrl^D
 
 ## Build container image
 Use [build](build).

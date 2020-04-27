@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -112,15 +113,16 @@ type Image struct {
 	Size      int
 }
 
-// https://www.ffmpeg.org/ffplay.html
+// See https://www.ffmpeg.org/ffplay.html
 func ffplay(volume, loop, ss, t, mediaPath string) {
+	ctx, cancel := context.WithCancel(context.Background())
 	// "FFREPORT=file=ffreport.log:level=32",
-	cmd := exec.Command("ffplay", "-vn", "-sn", "-nodisp", "-autoexit", "-volume", volume, "-loop", loop, "-ss", ss, mediaPath)
+	cc := exec.CommandContext(ctx, "ffplay", "-vn", "-sn", "-nodisp", "-autoexit", "-volume", volume, "-loop", loop, "-ss", ss, mediaPath)
 	if len(t) > 0 {
-		cmd = exec.Command("ffplay", "-vn", "-sn", "-nodisp", "-autoexit", "-volume", volume, "-loop", loop, "-ss", ss, "-t", t, mediaPath)
+		cc = exec.CommandContext(ctx, "ffplay", "-vn", "-sn", "-nodisp", "-autoexit", "-volume", volume, "-loop", loop, "-ss", ss, "-t", t, mediaPath)
 	}
 
-	stdin, _ := cmd.StdinPipe()
+	stdin, _ := cc.StdinPipe()
 	defer stdin.Close()
 	go func(stdin io.WriteCloser) {
 		scanner := bufio.NewScanner(os.Stdin)
@@ -128,18 +130,20 @@ func ffplay(volume, loop, ss, t, mediaPath string) {
 		for scanner.Scan() {
 			bb := scanner.Bytes()
 			stdin.Write(bb)
-			fmt.Printf("pipe %v\n", bb)
+			fmt.Printf("piped %v\n", bb)
 		}
+		fmt.Printf("Cancelled: %v\n", mediaPath)
+		cancel()
 	}(stdin)
 
 	// too noisy
-	// startReadingPipe(cmd)
+	// startReadingPipe(cc)
 
-	if err := cmd.Start(); err != nil {
+	if err := cc.Start(); err != nil {
 		log.Fatal(err)
 	}
-	if err := cmd.Wait(); err != nil {
-		log.Fatal(err)
+	if err := cc.Wait(); err != nil {
+		log.Println(err)
 	}
 }
 
