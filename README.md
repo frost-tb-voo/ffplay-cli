@@ -2,19 +2,19 @@
 Play only sound of sound or video files using [ffplay](https://www.ffmpeg.org/ffplay.html) as a CLI tool, without GUI.
 
 ## Build
-Use [cmd/build-without-container](cmd/build-without-container.sh).
+Use [cmd/build-without-container](cmd/build-without-container.sh) script.
 
 ## Run
-Use [cmd/run-without-container](cmd/run-without-container.sh.example).
+Use [cmd/run-without-container](cmd/run-without-container.sh.example) script.
 
 - Interrupt process : Ctrl^C
 - Play the next file : Ctrl^D
 
 ## Build container image
-Use [build](build).
+Use [build](build) script.
 
-## Run
-Use [run](run.sh.example).
+## Run container image
+Use [run](run.sh.example) script.
 
 ## Synopsis
 ### Play 1 audio file
