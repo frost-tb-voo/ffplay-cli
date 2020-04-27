@@ -17,6 +17,11 @@ import (
 	"time"
 )
 
+type Controller struct {
+	cancelFuncChan chan func()
+	endSignalChan  chan chan struct{}
+}
+
 func main() {
 	volume := flag.Int("volume", 50, "volume")
 	loop := flag.Int("loop", 1, "loop")
@@ -28,6 +33,38 @@ func main() {
 	extPath := flag.String("ext", "", "ext path")
 	flag.Parse()
 
+	controller := createController()
+	go func(controller *Controller) {
+		cancelled := make(chan struct{})
+		go func(cancelled chan<- struct{}) {
+			for {
+				scanner := bufio.NewScanner(os.Stdin)
+				scanner.Split(bufio.ScanWords)
+				for scanner.Scan() {
+				}
+				fmt.Println("Cancel End.")
+				cancelled <- struct{}{}
+			}
+		}(cancelled)
+
+		for {
+			cancelProc := <-controller.cancelFuncChan
+			endProc := <-controller.endSignalChan
+		scan:
+			for {
+				select {
+				case <-endProc:
+					fmt.Println("Get End.")
+					break scan
+				case <-cancelled:
+					fmt.Println("Get Cancel End.")
+					cancelProc()
+					break scan
+				}
+			}
+		}
+	}(controller)
+
 	indexFile, err := os.Open(*indexPath) // For read access.
 	if err != nil {
 		_, err = os.Open(*mediaPath) // For read access.
@@ -35,7 +72,7 @@ func main() {
 			log.Fatal(err)
 			return
 		}
-		ffplay(strconv.Itoa(*volume), strconv.Itoa(*loop), *ss, *t, *mediaPath)
+		ffplay(controller, strconv.Itoa(*volume), strconv.Itoa(*loop), *ss, *t, *mediaPath)
 		return
 	}
 
@@ -78,24 +115,31 @@ func main() {
 		}
 	}
 
-	ffplayShuffle := func(volume, t string, mediaPathes []string) {
+	ffplayShuffle := func(controller *Controller, volume, t string, mediaPathes []string) {
 		rand.Seed(time.Now().UnixNano())
 		for _, index := range rand.Perm(len(mediaPathes)) {
 			mediaPath := mediaPathes[index]
 			fmt.Printf("%s\n", mediaPath)
-			ffplay(volume, "1", "00:00", t, mediaPath)
+			ffplay(controller, volume, "1", "00:00", t, mediaPath)
 		}
 	}
 
 	if *loop <= 0 {
 		for {
-			ffplayShuffle(strconv.Itoa(*volume), *t, mediaPathes)
+			ffplayShuffle(controller, strconv.Itoa(*volume), *t, mediaPathes)
 		}
 	} else {
 		for ii := 0; ii < *loop; ii++ {
-			ffplayShuffle(strconv.Itoa(*volume), *t, mediaPathes)
+			ffplayShuffle(controller, strconv.Itoa(*volume), *t, mediaPathes)
 		}
 	}
+}
+
+func createController() *Controller {
+	cancelFuncChan := make(chan func())
+	endSignalChan := make(chan chan struct{})
+	controller := &Controller{cancelFuncChan, endSignalChan}
+	return controller
 }
 
 type MediaDirectory struct {
@@ -114,7 +158,7 @@ type Image struct {
 }
 
 // See https://www.ffmpeg.org/ffplay.html
-func ffplay(volume, loop, ss, t, mediaPath string) {
+func ffplay(controller *Controller, volume, loop, ss, t, mediaPath string) {
 	ctx, cancel := context.WithCancel(context.Background())
 	// "FFREPORT=file=ffreport.log:level=32",
 	cc := exec.CommandContext(ctx, "ffplay", "-vn", "-sn", "-nodisp", "-autoexit", "-volume", volume, "-loop", loop, "-ss", ss, mediaPath)
@@ -122,19 +166,14 @@ func ffplay(volume, loop, ss, t, mediaPath string) {
 		cc = exec.CommandContext(ctx, "ffplay", "-vn", "-sn", "-nodisp", "-autoexit", "-volume", volume, "-loop", loop, "-ss", ss, "-t", t, mediaPath)
 	}
 
-	stdin, _ := cc.StdinPipe()
-	defer stdin.Close()
-	go func(stdin io.WriteCloser) {
-		scanner := bufio.NewScanner(os.Stdin)
-		scanner.Split(bufio.ScanWords)
-		for scanner.Scan() {
-			bb := scanner.Bytes()
-			stdin.Write(bb)
-			fmt.Printf("piped %v\n", bb)
-		}
-		fmt.Printf("Cancelled: %v\n", mediaPath)
-		cancel()
-	}(stdin)
+	// no reaction from ffplay
+	// stdin, _ := cc.StdinPipe()
+	// defer stdin.Close()
+
+	end := make(chan struct{}, 1)
+
+	controller.cancelFuncChan <- cancel
+	controller.endSignalChan <- end
 
 	// too noisy
 	// startReadingPipe(cc)
@@ -145,6 +184,8 @@ func ffplay(volume, loop, ss, t, mediaPath string) {
 	if err := cc.Wait(); err != nil {
 		log.Println(err)
 	}
+	fmt.Printf("End: %v\n", mediaPath)
+	end <- struct{}{}
 }
 
 func startReadingPipe(cmd *exec.Cmd) {
